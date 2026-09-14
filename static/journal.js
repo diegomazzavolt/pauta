@@ -123,7 +123,8 @@ function citedText(node,text,sources){
 }
 function renderStory(story,cover){
   const article=el('article',undefined,cover?'cover':'topic-story'),main=el('div',undefined,'cover-story');
-  main.append(el('span',story.topic.toUpperCase(),'article-topic'),el('h2',story.headline));
+  if(!cover)main.append(el('span',story.topic.toUpperCase(),'article-topic'));
+  main.append(el('h2',story.headline));
   const summary=el('div',undefined,'story-copy');citedText(summary,story.summary,story.sources);main.append(summary);
   const aside=el('aside',undefined,'story-side');aside.append(el('h3','O que está em pauta'));
   const points=el('ul',undefined,'point-list');for(const point of story.points){const li=el('li');citedText(li,point,story.sources);points.append(li);}aside.append(points);
@@ -137,7 +138,8 @@ async function loadEdition(){
   try{
     const day=byId('edition-date').value||dashboard.today;const {edition}=await api('/editions/'+day);
     if(version!==editionVersion)return;
-    byId('edition-heading').textContent=day===dashboard.today?'O dia, por assunto.':dates.format(new Date(day+'T12:00:00-03:00'));
+    byId('edition-heading').textContent=edition?.sections?.[0]?.topic.toUpperCase() || 'Seu jornal';
+    byId('edition-heading').classList.toggle('edition-category',!!edition?.sections?.length);
     const fingerprint=JSON.stringify(edition);
     if(fingerprint!==editionFingerprint){editionFingerprint=fingerprint;byId('edition-content').replaceChildren();if(edition){byId('edition-content').append(renderStory(edition.sections[0],true));const rest=el('div',undefined,'section-stories');edition.sections.slice(1).forEach(s=>rest.append(renderStory(s,false)));byId('edition-content').append(rest);}}
     byId('edition-empty').hidden=!!edition || dashboard.topics.length>0;
