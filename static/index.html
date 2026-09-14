@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legenda — Do vídeo para o texto</title>
+  <meta name="description" content="Baixe legendas automáticas e originais do YouTube em SRT, VTT e TXT. Escolha o idioma e visualize a transcrição.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css"><script defer src="/static/app.js"></script>
+</head>
+<body>
+  <header class="header"><a class="brand" href="/" aria-label="Legenda, início"><span class="brand-icon">cc</span>legenda<span class="brand-period">.</span></a><span class="header-note">DO VÍDEO PARA O TEXTO</span><a class="help-link" href="#como-funciona">Como funciona <span aria-hidden="true">↗</span></a></header>
+  <main>
+    <section class="intro" aria-labelledby="title"><div class="eyebrow"><span class="youtube-icon" aria-hidden="true">▶</span> LEGENDAS DO YOUTUBE</div><h1 id="title">O vídeo fala.<br>Você leva o <span>texto.</span></h1><p>Legendas automáticas ou do autor, no idioma disponível.<br class="desktop-break"> Cole um link para começar.</p></section>
+    <section class="workspace" aria-label="Baixar legendas">
+      <form id="video-form" class="url-form"><label for="video-url">Link do vídeo</label><div class="input-row"><div class="input-wrap"><span aria-hidden="true" class="link-icon">↗</span><input id="video-url" name="url" type="text" inputmode="url" placeholder="Cole o link do YouTube aqui" autocomplete="off" required maxlength="2048" aria-describedby="url-hint"><button id="clear-url" class="clear" type="button" aria-label="Limpar link" hidden>×</button></div><button id="find-button" class="primary" type="submit"><span id="find-label">Buscar legendas</span><span aria-hidden="true" id="find-arrow">→</span></button></div><div class="form-footer"><span id="url-hint">youtube.com · youtu.be · Shorts</span><span class="formats-note">SRT <i></i> VTT <i></i> TXT</span></div></form>
+      <div id="notice" class="notice" role="alert" hidden></div>
+      <div id="loading" class="loading" role="status" hidden><span class="spinner"></span><div><strong>Procurando as legendas do vídeo</strong><p>Isso pode levar alguns instantes.</p></div></div>
+      <div id="empty" class="empty"><span class="empty-symbol" aria-hidden="true">[ cc ]</span><h2>Seu próximo texto começa aqui</h2><p>As legendas disponíveis aparecerão neste espaço.</p><div class="empty-tags"><span>Selecione o idioma</span><span aria-hidden="true">/</span><span>Visualize</span><span aria-hidden="true">/</span><span>Baixe</span></div></div>
+      <div id="results" hidden>
+        <div class="video-summary"><img id="thumbnail" alt="" width="160" height="90"><div><span class="result-kicker">VÍDEO ENCONTRADO</span><h2 id="video-title"></h2><p id="video-author"></p></div><a id="watch-link" class="watch-link" target="_blank" rel="noopener noreferrer" aria-label="Abrir vídeo no YouTube">↗</a></div>
+        <div class="result-grid"><section class="tracks-panel" aria-labelledby="languages-title"><div class="panel-heading"><h3 id="languages-title">Idiomas disponíveis</h3><span id="track-count" class="count"></span></div><div id="track-list" class="track-list"></div><p class="track-note">Automáticas são geradas pelo YouTube e podem conter erros.</p></section>
+        <section class="transcript-panel" aria-labelledby="transcript-title"><div class="panel-heading"><h3 id="transcript-title">Prévia da legenda</h3><span id="cue-count" class="muted"></span></div><div id="transcript-status" role="status"></div><div id="cues" class="cues" tabindex="0" aria-label="Texto da legenda"></div><div class="download-bar"><label for="format">Formato<select id="format"><option value="srt">SRT · com tempos</option><option value="vtt">VTT · para web</option><option value="txt">TXT · só texto</option></select></label><button id="download-button" class="primary" type="button" disabled><span aria-hidden="true">↓</span> Baixar legenda</button></div><p id="download-status" class="download-status" role="status"></p></section></div>
+      </div>
+    </section>
+    <section id="como-funciona" class="how"><div class="how-heading"><span class="eyebrow">SIMPLES ASSIM</span><h2>Três passos.<br>Um arquivo seu.</h2></div><article><span class="step">01</span><h3>Cole o link</h3><p>Use o endereço de um vídeo público do YouTube ou Shorts.</p></article><article><span class="step">02</span><h3>Escolha a legenda</h3><p>Selecione entre os idiomas e tipos que o vídeo oferece.</p></article><article><span class="step">03</span><h3>Leve o texto</h3><p>Baixe em SRT, VTT ou TXT, pronto para ler ou editar.</p></article></section>
+    <div class="availability"><span aria-hidden="true">ⓘ</span><p>O vídeo precisa ter legendas disponíveis. Não geramos uma nova transcrição de áudio.</p></div>
+  </main>
+  <footer><a class="brand small" href="/">legenda.</a><span>Menos pausa. Mais texto.</span><span>Independente do YouTube e do DownSub.</span></footer>
+</body>
+</html>

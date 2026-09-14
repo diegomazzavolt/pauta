@@ -1,0 +1,16 @@
+services:
+  pauta:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - pauta-data:/app/data
+    environment:
+      JOURNAL_DB: /app/data/journal.sqlite3
+      MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-600}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      YOUTUBE_PROXY_URL: ${YOUTUBE_PROXY_URL:-}
+volumes:
+  pauta-data:
