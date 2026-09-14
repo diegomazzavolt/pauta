@@ -14,13 +14,22 @@ async function api(path, body) {
   if (!response.ok) throw new Error(data?.detail?.message || 'Não foi possível concluir. Confira os dados e tente novamente.');
   return data;
 }
-function showPage(name) {
+const pageHashes = {edition:'', user:'#usuario', sources:'#assuntos', archive:'#acervo'};
+function showPage(name, updateLocation = true) {
+  if(!Object.hasOwn(pageHashes,name))name='edition';
   page = name;
+  if(updateLocation && location.hash!==pageHashes[name])history.pushState(null,'',location.pathname+location.search+pageHashes[name]);
   document.querySelectorAll('.page').forEach(n=>n.hidden=n.id !== 'page-'+name);
-  document.querySelectorAll('.nav-tab').forEach(n=>n.classList.toggle('selected',n.dataset.page===name));
+  byId('account-back').hidden=!['sources','archive'].includes(name);
+  const avatarLink=byId('header-avatar').parentElement;
+  if(name==='user')avatarLink.setAttribute('aria-current','page');else avatarLink.removeAttribute('aria-current');
+  document.title=name==='edition'?'Pauta — O jornal dos seus canais':`${({user:'Minha página',sources:'Assuntos e canais',archive:'Acervo de vídeos'})[name]} — Pauta`;
   if(name==='archive') loadArchive();
   if(name==='edition') loadEdition();
 }
+function routePage(){showPage(Object.keys(pageHashes).find(key=>pageHashes[key]===location.hash)||'edition',false);}
+window.addEventListener('hashchange',routePage);
+window.addEventListener('popstate',routePage);
 document.querySelectorAll('[data-page]').forEach(n=>n.addEventListener('click',()=>showPage(n.dataset.page)));
 document.querySelectorAll('[data-close]').forEach(n=>n.addEventListener('click',()=>byId(n.dataset.close).close()));
 function openImport() { byId('import-feedback').textContent=''; byId('import-dialog').showModal(); }
@@ -164,4 +173,19 @@ byId('next-page').addEventListener('click',()=>{archiveOffset+=50;loadArchive();
 async function openVideo(id){
   try{const video=await api('/videos/'+id);byId('read-title').textContent=video.title;byId('read-meta').replaceChildren(sourceLink(id,'Abrir vídeo original no YouTube ↗'));byId('read-text').textContent=video.cleaned_text||video.error||'A legenda automática ainda está pendente.';byId('read-analysis').replaceChildren();if(video.analysis){byId('read-analysis').append(el('h3','Resumo da redação'),el('p',video.analysis.summary));}byId('video-dialog').showModal();}catch(error){notice(error.message);}
 }
-refresh();setInterval(()=>{if(!document.hidden)refresh();},10000);
+function displayAvatar(source){byId('header-avatar').src=source;byId('profile-avatar').src=source;}
+try{const photo=localStorage.getItem('pauta-profile-photo');if(photo && /^data:image\/(jpeg|png|webp);base64,/.test(photo))displayAvatar(photo);}catch{}
+byId('profile-photo').addEventListener('change',async event=>{
+  const file=event.target.files[0];if(!file)return;
+  const feedback=byId('photo-feedback');feedback.textContent='';
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){feedback.textContent='Escolha uma foto JPG, PNG ou WebP de até 5 MB.';event.target.value='';return;}
+  try{
+    const bitmap=await createImageBitmap(file);
+    const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+    const size=Math.min(bitmap.width,bitmap.height);
+    canvas.getContext('2d').drawImage(bitmap,(bitmap.width-size)/2,(bitmap.height-size)/2,size,size,0,0,256,256);bitmap.close();
+    const source=canvas.toDataURL('image/png');localStorage.setItem('pauta-profile-photo',source);displayAvatar(source);feedback.textContent='Foto atualizada.';
+  }catch{feedback.textContent='Não foi possível salvar a foto. Verifique o arquivo e o armazenamento do navegador.';}
+  event.target.value='';
+});
+routePage();refresh();setInterval(()=>{if(!document.hidden)refresh();},10000);

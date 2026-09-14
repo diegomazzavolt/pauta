@@ -2,11 +2,20 @@
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pauta — O jornal dos seus canais</title><meta name="description" content="Seus canais do YouTube, reunidos em um jornal diário por assunto. Monitoramento, análise das legendas e matérias com fontes."><link rel="icon" href="/static/favicon.svg"><link rel="stylesheet" href="/static/journal.css"><script defer src="/static/journal.js"></script></head>
 <body>
-<div class="topline"><span>UMA LEITURA DO QUE IMPORTA</span><span id="top-date"></span><span>EDIÇÃO DIGITAL · DIÁRIA</span></div>
+<div class="topline"><span>UMA LEITURA DO QUE IMPORTA</span><span id="top-date"></span><div class="top-account"><span>EDIÇÃO DIGITAL · DIÁRIA</span><a class="avatar-link" href="#usuario" aria-label="Abrir página do usuário" title="Minha página"><img id="header-avatar" src="/static/avatar.svg" alt="" width="36" height="36"></a></div></div>
 <header class="masthead"><div class="mast-note">Seus canais.<br>Outras perspectivas.</div><a href="/" class="mast-title">Pauta<span>.</span></a><div class="mast-right">O jornal dos seus canais<br><span>Informação reunida. Fontes à vista.</span></div></header>
-<nav class="navigation" aria-label="Navegação principal"><div class="nav-tabs"><button class="nav-tab selected" data-page="edition">Jornal do dia</button><button class="nav-tab" data-page="sources">Assuntos e canais <span id="nav-count">0</span></button><button class="nav-tab" data-page="archive">Acervo de vídeos</button></div><button class="plain" id="editorial-open">Redação <span id="ai-dot" class="connection"></span></button></nav>
 <main>
 <div id="global-notice" role="alert" hidden></div>
+<a id="account-back" class="account-back" href="#usuario" hidden>← Minha página</a>
+<section id="page-user" class="page" hidden>
+  <div class="page-heading"><div><span class="eyebrow">SEU ESPAÇO NO PAUTA</span><h1 tabindex="-1">Minha página</h1><p>Organize suas fontes, consulte o acervo e cuide da redação.</p></div><a class="button" href="/">Ler o jornal ↗</a></div>
+  <div class="profile-card"><img id="profile-avatar" src="/static/avatar.svg" alt="Sua foto de perfil" width="80" height="80"><div><h2>Seu perfil</h2><label class="photo-label" for="profile-photo">Escolher foto<input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp"></label><p>A foto fica salva neste navegador.</p><span id="photo-feedback" role="status"></span></div></div>
+  <nav class="account-options" aria-label="Área do usuário">
+    <a class="account-option" href="#assuntos"><span class="eyebrow">SUAS FONTES</span><h2>Assuntos e canais <span id="nav-count">0</span></h2><p>Importe canais e acompanhe as editorias do seu jornal.</p><span class="option-arrow" aria-hidden="true">↗</span></a>
+    <a class="account-option" href="#acervo"><span class="eyebrow">SUA BIBLIOTECA</span><h2>Acervo de vídeos</h2><p>Consulte as legendas salvas, análises e fontes originais.</p><span class="option-arrow" aria-hidden="true">↗</span></a>
+    <button class="account-option" id="editorial-open"><span class="eyebrow">SUAS PREFERÊNCIAS</span><h2>Redação <span id="ai-dot" class="connection"></span></h2><p>Configure a inteligência que transforma as fontes em matérias.</p><span class="option-arrow" aria-hidden="true">↗</span></button>
+  </nav>
+</section>
 <section id="page-edition" class="page">
   <div class="edition-toolbar"><div><span class="eyebrow">SUA EDIÇÃO</span><h1 id="edition-heading">O dia, por assunto.</h1></div><label class="date-picker">Consultar edição<input type="date" id="edition-date"></label></div>
   <div id="edition-content"></div>
