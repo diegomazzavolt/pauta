@@ -4,7 +4,7 @@ from datetime import date
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from . import channels, editorial, monitor
-from . import settings
+from . import settings, caption_settings
 from .database import connect
 
 router = APIRouter(prefix='/api/journal')
@@ -28,6 +28,29 @@ class ActiveBody(BaseModel):
 class EditorialBody(BaseModel):
     key: str = Field(default='', max_length=500)
     model: str = Field(min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
+
+
+class CaptionConnectionBody(BaseModel):
+    proxy: str = Field(default='', max_length=2000)
+    direct: bool = False
+
+
+@router.post('/caption-connection')
+def caption_connection(body: CaptionConnectionBody):
+    old = caption_settings.proxy_url()
+    if not body.direct and not body.proxy.strip():
+        bad('Informe a conexão alternativa ou selecione Usar conexão direta.')
+    try:
+        caption_settings.save('' if body.direct else body.proxy)
+    except ValueError as exc:
+        bad(str(exc))
+    if old != caption_settings.proxy_url():
+        with connect() as db:
+            db.execute('UPDATE worker_state SET caption_next=0,caption_blocks=0 WHERE id=1')
+            db.execute("UPDATE videos SET next_attempt=0 WHERE status='waiting'")
+            db.execute('UPDATE channels SET next_check=0 WHERE active=1')
+        monitor.wake.set()
+    return {'ok': True, **caption_settings.status()}
 
 
 @router.post('/editorial')
@@ -78,7 +101,7 @@ def dashboard():
         editions = [r['day'] for r in db.execute('SELECT day FROM editions ORDER BY day DESC')]
     return {'topics': topics, 'channels': channel_rows, 'counts': counts, 'pending_analysis': pending_analysis,
             'worker': worker, 'ai_configured': editorial.configured(), 'model': settings.read()['model'], 'interval': monitor.INTERVAL,
-            'today': editorial.today(), 'editions': editions}
+            'today': editorial.today(), 'editions': editions, 'caption_connection': caption_settings.status()}
 
 
 @router.post('/topics/{topic_id}/priority')
@@ -117,7 +140,7 @@ def videos(offset: int = 0, topic_id: int | None = None):
     with connect() as db:
         total = db.execute(f'SELECT COUNT(*) n FROM videos v {where}', params).fetchone()['n']
         rows = [dict(r) for r in db.execute(f'''SELECT id,title,channel_id,published,published_known,discovered,collected,status,attempts,error,
-            next_attempt,language,analysis_status,analysis_error FROM videos v {where} ORDER BY discovered DESC LIMIT 50 OFFSET ?''', params+[offset])]
+            next_attempt,language,analysis_status,analysis_error,error_stage,error_code FROM videos v {where} ORDER BY discovered DESC LIMIT 50 OFFSET ?''', params+[offset])]
     return {'items': rows, 'total': total, 'offset': offset}
 
 

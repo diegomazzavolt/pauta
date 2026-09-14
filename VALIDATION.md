@@ -27,3 +27,12 @@ Ainda não verificados em produção: hospedagem contínua, matéria real com ch
 - Limitação global de ritmo e pausa progressiva após bloqueio do YouTube. Nenhuma tentativa de contornar autenticação ou bloqueio.
 - 35 testes passaram, cobrindo alternativa RSS/uploads, restrições, seleção inicial sem datas, idempotência, cadastro anterior, prioridade e pausa global das legendas.
 - Redação real continua dependente de configuração de chave/modelo pelo usuário.
+
+
+## Diagnóstico HTTP e configuração da conexão — 14/09/2026
+
+- Amostra real `GI6Ie5neiLQ`: `/watch`, `/youtubei/v1/player` e `/oembed` retornaram HTTP 200; `/api/timedtext` retornou HTTP 429. A listagem encontrou uma faixa automática, mas o texto não pôde ser coletado.
+- Teste independente com yt-dlp listou faixas automáticas e também recebeu HTTP 429 no texto. Nenhum áudio/vídeo foi baixado; não houve tentativa de resolver captcha ou contratar serviço/proxy.
+- A página pública do DownSub anuncia API autenticada com créditos; isso não revela a implementação do servidor. A tentativa no site público não produziu uma extração confirmada nesta sessão.
+- 45 testes locais passaram, incluindo preservação da chave editorial, não exposição de credenciais do proxy, prioridade da variável de ambiente, validação da configuração, retomada apenas quando a conexão muda e distinção entre token ausente e bloqueio global.
+- Nenhuma conexão alternativa real foi fornecida/configurada. A fila pendente permanece dependente do acesso do YouTube; esta entrega não é evidência de desbloqueio.

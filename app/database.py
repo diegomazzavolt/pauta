@@ -76,3 +76,6 @@ def init():
         if 'caption_next' not in {r['name'] for r in db.execute('PRAGMA table_info(worker_state)')}:
             db.execute('ALTER TABLE worker_state ADD COLUMN caption_next REAL NOT NULL DEFAULT 0')
             db.execute('ALTER TABLE worker_state ADD COLUMN caption_blocks INTEGER NOT NULL DEFAULT 0')
+        if 'error_stage' not in {r['name'] for r in db.execute('PRAGMA table_info(videos)')}:
+            db.execute("ALTER TABLE videos ADD COLUMN error_stage TEXT NOT NULL DEFAULT ''")
+            db.execute("ALTER TABLE videos ADD COLUMN error_code TEXT NOT NULL DEFAULT ''")

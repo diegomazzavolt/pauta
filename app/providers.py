@@ -1,6 +1,7 @@
 """Independent YouTube extraction; never calls DownSub or downloads video/audio."""
 import json
 import os
+import re
 import subprocess
 import sys
 from urllib.parse import urlparse
@@ -10,6 +11,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import GenericProxyConfig
 
 from .subtitles import from_json3, normalize
+from .caption_settings import proxy_url
 
 
 class TimedSession(requests.Session):
@@ -20,7 +22,7 @@ class TimedSession(requests.Session):
 
 def session():
     client = TimedSession()
-    proxy = os.getenv("YOUTUBE_PROXY_URL")
+    proxy = proxy_url()
     if proxy:
         client.proxies.update({"https": proxy, "http": proxy})
     return client
@@ -29,7 +31,12 @@ def session():
 def classify_error(exc):
     message = str(exc).lower()
     name = type(exc).__name__
-    if name in {"RequestBlocked", "IpBlocked", "PoTokenRequired"} or any(x in message for x in ["sign in to confirm", "429", "too many requests", "bot", "po token"]):
+    if name == 'PoTokenRequired' or 'po token' in message:
+        return 'CAPTION_TOKEN_REQUIRED', 'Este vídeo exige um token de acesso às legendas que o extrator atual não forneceu. Isso não confirma um bloqueio de toda a conexão.'
+    response = getattr(exc, 'response', None)
+    if name == 'IpBlocked' or (response is not None and response.status_code == 429) or re.search(r'\b429\b', message):
+        return 'YOUTUBE_BLOCKED', 'O YouTube respondeu HTTP 429 (limite de acesso). A fila aguarda nova tentativa; se persistir, configure outra conexão em Acesso às legendas.'
+    if name == "RequestBlocked" or any(x in message for x in ["sign in to confirm", "too many requests", "not a bot"]):
         return "YOUTUBE_BLOCKED", "O YouTube bloqueou a consulta nesta conexão. Aguarde e tente novamente; em hospedagens, o administrador pode configurar outra conexão de saída."
     if name in {"VideoUnavailable", "VideoUnplayable", "AgeRestricted"} or any(x in message for x in ["unavailable", "private video", "age-restricted"]):
         return "VIDEO_UNAVAILABLE", "Este vídeo está indisponível, é privado ou exige acesso à conta."
@@ -39,7 +46,7 @@ def classify_error(exc):
 
 
 def discover(id):
-    proxy = os.getenv("YOUTUBE_PROXY_URL")
+    proxy = proxy_url()
     client = YouTubeTranscriptApi(http_client=session(), proxy_config=GenericProxyConfig(https_url=proxy, http_url=proxy) if proxy else None)
     try:
         transcripts = list(client.list(id))
@@ -72,8 +79,8 @@ def metadata(id):
 
 def discover_ytdlp(id):
     args = [sys.executable, "-X", "utf8", "-m", "yt_dlp", "--ignore-config", "--skip-download", "--no-playlist", "--no-warnings", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0", "--dump-single-json"]
-    if os.getenv("YOUTUBE_PROXY_URL"):
-        args += ["--proxy", os.environ["YOUTUBE_PROXY_URL"]]
+    if proxy_url():
+        args += ["--proxy", proxy_url()]
     args += ["--", f"https://www.youtube.com/watch?v={id}"]
     result = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=55, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
     if result.returncode:

@@ -9,6 +9,7 @@ from urllib.parse import unquote, urlparse
 from defusedxml import ElementTree
 import requests
 from .providers import session
+from .caption_settings import proxy_url
 
 CHANNEL_ID = re.compile(r'UC[A-Za-z0-9_-]{22}')
 NS = {'a': 'http://www.w3.org/2005/Atom', 'yt': 'http://www.youtube.com/xml/schemas/2015'}
@@ -130,8 +131,8 @@ def uploads(channel_id):
 def listing(url, limit):
     args = [sys.executable, '-X', 'utf8', '-m', 'yt_dlp', '--ignore-config', '--flat-playlist', '--playlist-end', str(limit),
             '--dump-single-json', '--skip-download', '--no-warnings', '--socket-timeout', '15', '--retries', '0', '--extractor-retries', '0']
-    if os.getenv('YOUTUBE_PROXY_URL'):
-        args += ['--proxy', os.environ['YOUTUBE_PROXY_URL']]
+    if proxy_url():
+        args += ['--proxy', proxy_url()]
     args += ['--', url]
     result = subprocess.run(args, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=65,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)

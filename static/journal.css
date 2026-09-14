@@ -8,3 +8,5 @@
 @media(max-width:760px){.topline{gap:10px;font-size:8px;letter-spacing:.6px}.top-account{gap:9px}.avatar-link{width:32px;height:32px}.account-options{grid-template-columns:1fr;gap:12px}.account-option{padding:22px 20px 36px}.account-option h2{margin-top:12px;font-size:24px}.profile-card{gap:18px}.profile-card>img{width:64px;height:64px}}
 
 #edition-heading{margin:0;overflow-wrap:anywhere}#edition-heading.edition-category{color:var(--red)}
+
+.monitor-actions{display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0}#caption-connection-feedback{font-size:13px;line-height:1.7;color:var(--muted)}

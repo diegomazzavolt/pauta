@@ -85,3 +85,10 @@ A redação precisa de chave/modelo válidos e saldo/limites de API. Custos depe
 Testes usam banco temporário e conteúdo sintético, sem cadastrar exemplos no jornal real. Veja [VALIDATION.md](VALIDATION.md) e [RESEARCH.md](RESEARCH.md).
 
 Fontes técnicas: [YouTube feeds](https://developers.google.com/youtube/v3/guides/push_notifications), [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [OpenAI Responses](https://developers.openai.com/api/reference/cli/resources/responses/methods/create).
+
+
+### Diagnóstico e conexão das legendas
+
+Em **Minha página → Assuntos e canais → Acesso às legendas**, você pode configurar um proxy HTTP/HTTPS que já possua. Ele é usado para as consultas ao YouTube, inclusive pelos extratores alternativos; não altera a conexão da OpenAI. A credencial fica em `data/caption-settings.json`, ignorado pelo Git. `YOUTUBE_PROXY_URL`, quando definida, tem precedência e bloqueia a edição pela interface. Alterar efetivamente a conexão retoma a fila; salvar o mesmo endereço não elimina a pausa de segurança.
+
+O painel diferencia vídeos ainda não tentados de vídeos com falha. Novas falhas registram a etapa (listagem ou leitura do texto) e o código sanitizado. Um token de legenda ausente não é mais tratado como bloqueio global de IP. HTTP 429 continua gerando pausa progressiva: a alteração de código não garante remover uma limitação aplicada pelo YouTube e um proxy também pode ser bloqueado.

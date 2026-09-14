@@ -6,6 +6,7 @@ from datetime import datetime
 from threading import Event, Thread
 
 from . import channels, editorial, providers
+from .caption_settings import proxy_url
 from .database import connect, init
 
 INTERVAL = max(60, int(os.getenv('MONITOR_INTERVAL_SECONDS', '600')))
@@ -92,6 +93,8 @@ def poll_channel(channel):
 
 
 def collect(video):
+    connection = proxy_url()
+    stage = 'list'
     now = time.time()
     with connect() as db:
         db.execute("UPDATE videos SET status='collecting',next_attempt=?,attempts=attempts+1 WHERE id=?", (now + 240, video['id']))
@@ -102,6 +105,7 @@ def collect(video):
         if not auto:
             raise ValueError('A legenda automática ainda não está disponível. O vídeo continuará sendo verificado.')
         auto.sort(key=lambda t: (not t['code'].startswith('pt'), t['code'] != 'en'))
+        stage = 'fetch'
         cues = providers.fetch_track(auto[0])
         if not cues:
             raise ValueError('A legenda automática retornou vazia. Nova tentativa programada.')
@@ -111,15 +115,17 @@ def collect(video):
         if not treated.strip():
             raise ValueError('A legenda não contém fala utilizável. Nova tentativa programada.')
         with connect() as db:
-            db.execute("UPDATE videos SET status='ready',collected=?,language=?,cues=?,cleaned_text=?,error='' WHERE id=?",
+            db.execute("UPDATE videos SET status='ready',collected=?,language=?,cues=?,cleaned_text=?,error='',error_stage='',error_code='' WHERE id=?",
                        (time.time(), auto[0]['code'], json.dumps(cues, ensure_ascii=False), treated, video['id']))
-            db.execute('UPDATE worker_state SET caption_blocks=0,caption_next=? WHERE id=1', (time.time()+CAPTION_INTERVAL,))
+            if connection == proxy_url():
+                db.execute('UPDATE worker_state SET caption_blocks=0,caption_next=? WHERE id=1', (time.time()+CAPTION_INTERVAL,))
     except Exception as exc:
         message = str(exc) if isinstance(exc, ValueError) else providers.classify_error(exc)[1]
         delay = min(86400, 300 * 2 ** min(video['attempts'], 9))
         with connect() as db:
-            db.execute("UPDATE videos SET status='waiting',next_attempt=?,error=? WHERE id=?", (now + delay, message, video['id']))
-            if providers.classify_error(exc)[0]=='YOUTUBE_BLOCKED':
+            code = providers.classify_error(exc)[0]
+            db.execute("UPDATE videos SET status='waiting',next_attempt=?,error=?,error_stage=?,error_code=? WHERE id=?", (now + delay, message, stage, code, video['id']))
+            if code=='YOUTUBE_BLOCKED' and connection == proxy_url():
                 blocks=db.execute('SELECT caption_blocks FROM worker_state WHERE id=1').fetchone()['caption_blocks']
                 cooldown=min(21600,900*2**min(blocks,5))
                 db.execute('UPDATE worker_state SET caption_next=?,caption_blocks=caption_blocks+1 WHERE id=1', (time.time()+cooldown,))

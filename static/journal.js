@@ -36,6 +36,22 @@ function openImport() { byId('import-feedback').textContent=''; byId('import-dia
 ['start-import','import-open'].forEach(id=>byId(id).addEventListener('click',openImport));
 byId('pending-sources').addEventListener('click',()=>showPage('sources'));
 byId('editorial-open').addEventListener('click',()=>{byId('api-model').value=dashboard?.model || ''; byId('editorial-dialog').showModal();});
+byId('caption-connection-open').addEventListener('click',()=>{
+  const config=dashboard?.caption_connection||{};
+  byId('caption-connection-status').textContent=config.proxy_configured?'Conexão atual: proxy configurado.':'Conexão atual: saída direta deste servidor.';
+  byId('caption-connection-feedback').textContent=config.managed_by_environment?'Definida por YOUTUBE_PROXY_URL no servidor. Altere essa variável para mudar a conexão.':'';
+  byId('caption-proxy').value='';byId('caption-direct').checked=false;
+  ['caption-proxy','caption-direct','caption-connection-save'].forEach(id=>byId(id).disabled=!!config.managed_by_environment);
+  byId('caption-connection-dialog').showModal();
+});
+byId('caption-connection-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=event.submitter;button.disabled=true;
+  try{
+    await api('/caption-connection',{proxy:byId('caption-proxy').value,direct:byId('caption-direct').checked});
+    byId('caption-proxy').value='';byId('caption-connection-feedback').textContent='Conexão salva. Se foi alterada, a fila retomará as tentativas automaticamente. O resultado de cada coleta aparece no acervo.';
+    await refresh();
+  }catch(error){byId('caption-connection-feedback').textContent=error.message;}finally{button.disabled=false;}
+});
 
 byId('channel-file').addEventListener('change',async event=>{
   const file=event.target.files[0]; if(!file)return;
@@ -105,6 +121,7 @@ async function refresh(){
     byId('stat-channels').textContent=dashboard.channels.filter(c=>c.active).length;
     byId('stat-ready').textContent=dashboard.counts.ready||0;
     byId('stat-pending').textContent=Object.entries(dashboard.counts).reduce((sum,[status,n])=>sum+(status==='ready'?0:n),0);
+    byId('caption-queue-detail').textContent=`${dashboard.counts.pending||0} vídeos aguardam a primeira tentativa · ${dashboard.counts.waiting||0} aguardam nova tentativa após falha · ${dashboard.counts.collecting||0} em coleta.`;
     byId('ai-dot').classList.toggle('on',dashboard.ai_configured);
     const recent=dashboard.worker.heartbeat>(Date.now()/1000-300);
     byId('monitor-status').textContent=recent?dashboard.worker.message:'Monitor sem atividade recente';
@@ -162,6 +179,7 @@ async function loadArchive(){
       info.append(el('h2',video.title),el('span',statusNames[video.status]||video.status,'badge '+(video.status==='ready'?'':'waiting')));
       info.append(el('p',`${video.published_known ? 'Publicado em '+shortDates.format(new Date(video.published*1000)) : 'Encontrado em '+shortDates.format(new Date(video.discovered*1000))+' · publicação não informada pelo YouTube'}${video.status==='ready' ? ' · '+(video.analysis_status==='ready'?'Analisado':video.analysis_status==='error'?'Falha na redação':'Aguardando redação') : ''}`));
       if(video.error||video.analysis_error)info.append(el('p',video.error||video.analysis_error));
+      if(video.error_stage)info.append(el('p',`Etapa da falha: ${video.error_stage==='fetch'?'acesso ao texto da legenda':'consulta da lista de legendas'}.`));
       const read=el('button','Abrir conteúdo','button small');read.addEventListener('click',()=>openVideo(video.id));actions.append(read);
       if(video.status!=='ready'||video.analysis_status==='error'){const retry=el('button','Tentar novamente','button small');retry.addEventListener('click',async()=>{retry.disabled=true;try{await api(`/videos/${video.id}/retry`,{});await loadArchive();}catch(error){notice(error.message);}});actions.append(retry);}
       row.append(info,actions);byId('videos-list').append(row);
