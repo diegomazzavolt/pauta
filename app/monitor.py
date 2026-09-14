@@ -9,6 +9,7 @@ from . import channels, editorial, providers
 from .database import connect, init
 
 INTERVAL = max(60, int(os.getenv('MONITOR_INTERVAL_SECONDS', '600')))
+CAPTION_INTERVAL = max(20, int(os.getenv('CAPTION_INTERVAL_SECONDS', '45')))
 wake = Event()
 stopping = Event()
 thread = None
@@ -27,6 +28,8 @@ def poll_channel(channel):
     now = time.time()
     try:
         id = channel['youtube_id'] or channels.resolve(channel['url'])
+        with connect() as db:
+            db.execute('UPDATE channels SET youtube_id=? WHERE id=?', (id, channel['id']))
         title, entries = channels.feed(id)
         coverage_error = ''
         recovered = []
@@ -44,22 +47,45 @@ def poll_channel(channel):
             if existing:
                 db.execute("UPDATE channels SET youtube_id=?,title=?,active=0,status='duplicate',error=? WHERE id=?", (id, title, 'Este canal já está cadastrado neste assunto.', channel['id']))
                 return
+            seen = {r['video_id'] for r in db.execute('SELECT video_id FROM channel_seen WHERE channel_id=?', (channel['id'],))}
+            first = not channel.get('bootstrapped', 0) or not channel['last_video']
+            latest = next((e['id'] for e in entries if e.get('live_status') not in {'is_upcoming','is_live'} and (e.get('published') is None or e['published']<=now)), None)
+            boundary = next((i for i,e in enumerate(entries) if e['id']==channel['last_video']),len(entries))
+            newer = {e['id'] for e in entries[:boundary]} if channel['last_video'] else set()
+            recovered_ids = {e['id'] for e in recovered}
             for entry in recovered + entries:
-                if not channel['include_recent'] and entry['published'] < channel['created']:
+                published = entry.get('published')
+                initial_latest = first and entry['id']==latest
+                after_signup = published is not None and published>=channel['created']
+                eligible = initial_latest or (first and channel['include_recent']) or after_signup or (entry['id'] in recovered_ids) or (not first and entry['id'] in newer)
+                if (entry['id'] in seen and not initial_latest) or not eligible:
                     continue
                 db.execute('''INSERT OR IGNORE INTO videos(id,channel_id,title,published,discovered,next_attempt)
-                              VALUES(?,?,?,?,?,?)''', (entry['id'], id, entry['title'], entry['published'], now, max(now, entry['published'])))
+                              VALUES(?,?,?,?,?,?)''', (entry['id'], id, entry['title'], published or now, now, max(now, published or now)))
+                if published is None:
+                    db.execute('UPDATE videos SET published_known=0 WHERE id=? AND discovered=?', (entry['id'],now))
+                if initial_latest:
+                    db.execute('UPDATE videos SET capture_priority=1,next_attempt=0 WHERE id=? AND status!=?', (entry['id'],'ready'))
                 db.execute('INSERT OR IGNORE INTO video_topics VALUES(?,?)', (entry['id'], channel['topic_id']))
                 analyzed = db.execute("SELECT collected FROM videos WHERE id=? AND analysis_status='ready'", (entry['id'],)).fetchone()
                 if analyzed:
                     day = datetime.fromtimestamp(analyzed['collected'], editorial.TZ).date().isoformat()
                     db.execute('INSERT OR IGNORE INTO dirty_editions VALUES(?)', (day,))
+            for entry in entries + recovered:
+                db.execute('INSERT OR IGNORE INTO channel_seen VALUES(?,?)', (channel['id'],entry['id']))
             # Keep recovery cursor on failure; previously inserted videos are deduplicated.
             cursor = channel['last_video'] if coverage_error else (entries[0]['id'] if entries else channel['last_video'])
-            db.execute('''UPDATE channels SET youtube_id=?,title=?,status=?,checked=?,next_check=?,error=?,last_video=?,failures=0 WHERE id=?''',
+            db.execute('''UPDATE channels SET youtube_id=?,title=?,status=?,checked=?,next_check=?,error=?,last_video=?,failures=0,bootstrapped=1 WHERE id=?''',
                        (id, title, 'catchup_pending' if coverage_error else 'watching', now, now + INTERVAL, coverage_error, cursor, channel['id']))
     except Exception as exc:
-        message = str(exc) if isinstance(exc, ValueError) else 'Não foi possível consultar este canal. Nova tentativa programada.'
+        if isinstance(exc, ValueError):
+            message = str(exc)
+        elif getattr(exc, 'response', None) is not None:
+            message = f'O YouTube retornou HTTP {exc.response.status_code}. Nova tentativa programada.'
+        elif isinstance(exc, (TimeoutError,)) or 'timeout' in type(exc).__name__.lower():
+            message = 'O YouTube demorou a responder. Nova tentativa programada.'
+        else:
+            message = 'Falha de conexão com o YouTube. Nova tentativa programada.'
         with connect() as db:
             db.execute("UPDATE channels SET status='error',checked=?,next_check=?,error=?,failures=failures+1 WHERE id=?",
                        (now, now + min(21600, 60 * 2 ** min(channel['failures'], 8)), message, channel['id']))
@@ -69,6 +95,7 @@ def collect(video):
     now = time.time()
     with connect() as db:
         db.execute("UPDATE videos SET status='collecting',next_attempt=?,attempts=attempts+1 WHERE id=?", (now + 240, video['id']))
+        db.execute('UPDATE worker_state SET caption_next=? WHERE id=1', (now+CAPTION_INTERVAL,))
     try:
         _, _, tracks = providers.discover(video['id'])
         auto = [t for t in tracks if t['kind'] == 'automatic']
@@ -86,11 +113,16 @@ def collect(video):
         with connect() as db:
             db.execute("UPDATE videos SET status='ready',collected=?,language=?,cues=?,cleaned_text=?,error='' WHERE id=?",
                        (time.time(), auto[0]['code'], json.dumps(cues, ensure_ascii=False), treated, video['id']))
+            db.execute('UPDATE worker_state SET caption_blocks=0,caption_next=? WHERE id=1', (time.time()+CAPTION_INTERVAL,))
     except Exception as exc:
         message = str(exc) if isinstance(exc, ValueError) else providers.classify_error(exc)[1]
         delay = min(86400, 300 * 2 ** min(video['attempts'], 9))
         with connect() as db:
             db.execute("UPDATE videos SET status='waiting',next_attempt=?,error=? WHERE id=?", (now + delay, message, video['id']))
+            if providers.classify_error(exc)[0]=='YOUTUBE_BLOCKED':
+                blocks=db.execute('SELECT caption_blocks FROM worker_state WHERE id=1').fetchone()['caption_blocks']
+                cooldown=min(21600,900*2**min(blocks,5))
+                db.execute('UPDATE worker_state SET caption_next=?,caption_blocks=caption_blocks+1 WHERE id=1', (time.time()+cooldown,))
 
 
 def analyze(video):
@@ -121,10 +153,11 @@ def cycle():
             state('Consultando ' + (channel['title'] or channel['url']))
             poll_channel(channel)
         with connect() as db:
-            pending_videos = [dict(x) for x in db.execute('''SELECT v.* FROM videos v WHERE status!='ready' AND next_attempt<=?
+            caption_next=db.execute('SELECT caption_next FROM worker_state WHERE id=1').fetchone()['caption_next']
+            pending_videos = [] if caption_next>time.time() else [dict(x) for x in db.execute('''SELECT v.* FROM videos v WHERE status!='ready' AND next_attempt<=?
                 AND EXISTS(SELECT 1 FROM channels c JOIN video_topics vt ON vt.topic_id=c.topic_id
                     WHERE vt.video_id=v.id AND c.youtube_id=v.channel_id AND c.active=1)
-                ORDER BY next_attempt LIMIT 3''', (time.time(),))]
+                ORDER BY capture_priority DESC,next_attempt,discovered LIMIT 1''', (time.time(),))]
         for video in pending_videos:
             if stopping.is_set(): return
             state('Acessando a legenda: ' + video['title'])

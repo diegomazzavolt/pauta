@@ -22,7 +22,7 @@ def main():
                 print(json.dumps(entries)); return
             if re.fullmatch(r'[\w-]{11}', entry.get('id', '')):
                 entries.append({'id': entry['id'], 'title': entry.get('title', entry['id']),
-                                'published': entry.get('timestamp') or time.time()})
+                                'published': entry.get('timestamp')})
     # A deleted anchor must not silently mark incomplete coverage as complete.
     raise ValueError('Saved cursor not found; recovery requires attention')
 

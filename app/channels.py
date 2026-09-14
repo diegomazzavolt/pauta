@@ -7,6 +7,7 @@ from datetime import datetime
 from urllib.parse import unquote, urlparse
 
 from defusedxml import ElementTree
+import requests
 from .providers import session
 
 CHANNEL_ID = re.compile(r'UC[A-Za-z0-9_-]{22}')
@@ -55,6 +56,22 @@ def parse_import(text):
 
 
 def resolve(url):
+    url = channel_url(url)
+    try:
+        return resolve_page(url)
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code in {401,403,429}:
+            raise
+    except (requests.ConnectionError, requests.Timeout, ValueError):
+        pass
+    data = listing(url, 1)
+    cid = data.get('channel_id')
+    if not cid or not CHANNEL_ID.fullmatch(cid):
+        raise ValueError('Não foi possível identificar este canal. Confira o endereço.')
+    return cid
+
+
+def resolve_page(url):
     tail = url.rsplit('/', 1)[-1]
     if '/channel/' in url and CHANNEL_ID.fullmatch(tail):
         return tail
@@ -80,6 +97,50 @@ def resolve(url):
 
 
 def feed(channel_id):
+    try:
+        return rss_feed(channel_id)
+    except requests.HTTPError as exc:
+        # A missing RSS feed does not mean a missing channel. Do not circumvent access blocks.
+        if exc.response is not None and exc.response.status_code in {401,403,429}:
+            raise
+        return uploads(channel_id)
+    except (requests.ConnectionError, requests.Timeout, ValueError):
+        return uploads(channel_id)
+
+
+def uploads(channel_id):
+    if not CHANNEL_ID.fullmatch(channel_id):
+        raise ValueError('ID de canal inválido.')
+    data = listing('https://www.youtube.com/playlist?list=UU' + channel_id[2:], 30)
+    if data.get('channel_id') != channel_id:
+        raise ValueError('A lista de uploads não corresponde ao canal solicitado.')
+    entries = []
+    for entry in data.get('entries', []):
+        if not re.fullmatch(r'[A-Za-z0-9_-]{11}', entry.get('id', '')):
+            continue
+        if entry.get('availability') in {'private', 'premium_only', 'subscriber_only'}:
+            continue
+        if entry.get('live_status') in {'is_upcoming', 'is_live'}:
+            continue
+        entries.append({'id': entry['id'], 'title': entry.get('title') or entry['id'],
+                        'published': entry.get('timestamp'), 'live_status': entry.get('live_status')})
+    return data.get('channel') or data.get('uploader') or channel_id, entries
+
+
+def listing(url, limit):
+    args = [sys.executable, '-X', 'utf8', '-m', 'yt_dlp', '--ignore-config', '--flat-playlist', '--playlist-end', str(limit),
+            '--dump-single-json', '--skip-download', '--no-warnings', '--socket-timeout', '15', '--retries', '0', '--extractor-retries', '0']
+    if os.getenv('YOUTUBE_PROXY_URL'):
+        args += ['--proxy', os.environ['YOUTUBE_PROXY_URL']]
+    args += ['--', url]
+    result = subprocess.run(args, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=65,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    if result.returncode:
+        raise ValueError('Não foi possível listar os uploads do canal. Nova tentativa programada.')
+    return json.loads(result.stdout)
+
+
+def rss_feed(channel_id):
     if not CHANNEL_ID.fullmatch(channel_id):
         raise ValueError('ID de canal inválido.')
     with session() as client:
@@ -105,8 +166,8 @@ def feed(channel_id):
 
 def catch_up(channel_id, stop_id):
     """Reconcile beyond RSS window. Failure keeps the old cursor and a visible warning."""
-    result = subprocess.run([sys.executable, '-m', 'app.reconcile', channel_id, stop_id], capture_output=True,
-        text=True, encoding='utf-8', timeout=180,
+    result = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'app.reconcile', channel_id, stop_id], capture_output=True,
+        text=True, encoding='utf-8', errors='replace', timeout=180,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     if result.returncode:
         raise ValueError('A recuperação de vídeos fora do feed está pendente. O ponto de acompanhamento foi preservado para nova tentativa.')

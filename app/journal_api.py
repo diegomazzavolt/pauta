@@ -104,7 +104,7 @@ def active(channel_id: int, body: ActiveBody):
 def check():
     with connect() as db:
         # Avoid bypassing platform backoff by repeated button clicks.
-        db.execute("UPDATE channels SET next_check=0 WHERE active=1 AND status='watching' AND checked<?", (time.time()-60,))
+        db.execute("UPDATE channels SET next_check=0 WHERE active=1 AND (checked IS NULL OR checked<?)", (time.time()-60,))
     monitor.wake.set()
     return {'queued': True}
 
@@ -116,7 +116,7 @@ def videos(offset: int = 0, topic_id: int | None = None):
     params = [topic_id] if topic_id else []
     with connect() as db:
         total = db.execute(f'SELECT COUNT(*) n FROM videos v {where}', params).fetchone()['n']
-        rows = [dict(r) for r in db.execute(f'''SELECT id,title,channel_id,published,discovered,collected,status,attempts,error,
+        rows = [dict(r) for r in db.execute(f'''SELECT id,title,channel_id,published,published_known,discovered,collected,status,attempts,error,
             next_attempt,language,analysis_status,analysis_error FROM videos v {where} ORDER BY discovered DESC LIMIT 50 OFFSET ?''', params+[offset])]
     return {'items': rows, 'total': total, 'offset': offset}
 
@@ -136,7 +136,7 @@ def video(id: str):
 def retry(id: str):
     with connect() as db:
         if not db.execute('SELECT id FROM videos WHERE id=?', (id,)).fetchone(): bad('Vídeo não encontrado.', 404)
-        db.execute("UPDATE videos SET next_attempt=0,analysis_retry=0 WHERE id=? AND status!='collecting'", (id,))
+        db.execute("UPDATE videos SET next_attempt=0,analysis_retry=0,capture_priority=1 WHERE id=? AND status!='collecting'", (id,))
     monitor.wake.set()
     return {'queued': True}
 

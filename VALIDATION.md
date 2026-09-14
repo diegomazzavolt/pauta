@@ -17,3 +17,13 @@
 - Nenhum canal ou matéria fictícia foi inserido no banco do usuário.
 
 Ainda não verificados em produção: hospedagem contínua, matéria real com chave OpenAI, recuperação de lacuna real maior que a janela RSS e longo prazo com grande volume de canais.
+
+## Correção do acompanhamento e primeiro vídeo — 14/09/2026
+
+- Reproduzido HTTP 404 no RSS de canais existentes. A listagem pública de uploads por yt-dlp funcionou; adicionada como alternativa para 404/falhas de conexão, preservando restrições 401/403/429.
+- Na verificação final, todos os 13 canais cadastrados foram identificados e listados. A disponibilidade do RSS oscilou durante a investigação.
+- Último vídeo incluído automaticamente na primeira consulta, inclusive para cadastros anteriores, com prioridade sobre a fila histórica. Lista inicial de IDs evita incluir vídeos antigos quando o YouTube não informa datas.
+- 14 legendas já estavam persistidas (295.921 caracteres) antes da atualização; banco copiado para backup antes da migração.
+- Limitação global de ritmo e pausa progressiva após bloqueio do YouTube. Nenhuma tentativa de contornar autenticação ou bloqueio.
+- 35 testes passaram, cobrindo alternativa RSS/uploads, restrições, seleção inicial sem datas, idempotência, cadastro anterior, prioridade e pausa global das legendas.
+- Redação real continua dependente de configuração de chave/modelo pelo usuário.

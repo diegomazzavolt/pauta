@@ -54,6 +54,9 @@ def init():
           day TEXT PRIMARY KEY, content TEXT NOT NULL, fingerprint TEXT NOT NULL,
           updated REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS dirty_editions (day TEXT PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS channel_seen (
+          channel_id INTEGER NOT NULL REFERENCES channels(id), video_id TEXT NOT NULL,
+          PRIMARY KEY(channel_id,video_id));
         CREATE TABLE IF NOT EXISTS worker_state (
           id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL NOT NULL DEFAULT 0,
           running INTEGER NOT NULL DEFAULT 0, message TEXT NOT NULL DEFAULT '',
@@ -62,3 +65,14 @@ def init():
         CREATE INDEX IF NOT EXISTS video_due ON videos(status,next_attempt);
         CREATE INDEX IF NOT EXISTS channel_due ON channels(active,next_check);
         ''')
+        if 'bootstrapped' not in {r['name'] for r in db.execute('PRAGMA table_info(channels)')}:
+            db.execute('ALTER TABLE channels ADD COLUMN bootstrapped INTEGER NOT NULL DEFAULT 0')
+            # Existing subscriptions receive their first latest-video collection after upgrading.
+            db.execute('UPDATE channels SET next_check=0 WHERE active=1')
+        if 'published_known' not in {r['name'] for r in db.execute('PRAGMA table_info(videos)')}:
+            db.execute('ALTER TABLE videos ADD COLUMN published_known INTEGER NOT NULL DEFAULT 1')
+        if 'capture_priority' not in {r['name'] for r in db.execute('PRAGMA table_info(videos)')}:
+            db.execute('ALTER TABLE videos ADD COLUMN capture_priority INTEGER NOT NULL DEFAULT 0')
+        if 'caption_next' not in {r['name'] for r in db.execute('PRAGMA table_info(worker_state)')}:
+            db.execute('ALTER TABLE worker_state ADD COLUMN caption_next REAL NOT NULL DEFAULT 0')
+            db.execute('ALTER TABLE worker_state ADD COLUMN caption_blocks INTEGER NOT NULL DEFAULT 0')

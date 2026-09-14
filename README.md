@@ -7,7 +7,7 @@ Um **jornal diário baseado nos canais do YouTube que você acompanha**. Cada TX
 1. Abra **Assuntos e canais → Importar assunto**.
 2. Dê um nome ao assunto e escolha a prioridade na capa.
 3. Selecione um TXT com um link de canal por linha, ou cole o bloco. Aceita `@nome`, `/channel/UC…`, `/c/…` e `/user/…`; TXT em UTF-8 ou UTF-16 com BOM.
-4. Salve para acompanhar novos vídeos. Por padrão, entram apenas publicações posteriores ao cadastro. A opção de incluir o feed recente permite começar com material já publicado.
+4. Ao salvar, o último vídeo disponível de cada canal entra imediatamente na fila de coleta e análise. Depois, entram as novas publicações. A opção de incluir o feed recente adiciona também os outros vídeos já publicados.
 5. Em **Redação**, informe uma chave OpenAI e o ID de um modelo com suporte a Responses e Structured Outputs. A chave permanece no servidor, fora do Git; a API é cobrada na sua conta.
 6. Leia **Jornal do dia**, consulte datas anteriores e abra as transcrições em **Acervo de vídeos**.
 
@@ -46,7 +46,7 @@ Dados: `data/journal.sqlite3`. Configuração de redação: `data/editorial-sett
 ## Pipeline
 
 - **Importação:** erros por linha, duplicatas ignoradas, até 500 canais/128 KB por bloco. Blocos adicionais podem usar um assunto existente. Aliases que resolvem para um canal já cadastrado no assunto são desativados como duplicados.
-- **Descoberta:** feeds Atom a cada 10 minutos. Vídeos/Shorts do feed são registrados uma única vez pelo ID.
+- **Descoberta:** feeds Atom a cada 10 minutos, com alternativa pela playlist pública de uploads quando o RSS retorna 404 ou falha de rede. Uma lista inicial de IDs evita importar todo o histórico por falta de datas. O último vídeo entra automaticamente na primeira consulta, inclusive para canais cadastrados antes desta atualização.
 - **Recuperação:** quando o último vídeo conhecido sai do feed, percorre a playlist de uploads até o marcador salvo. Se falhar, mantém o marcador e mostra a pendência, sem declarar cobertura completa.
 - **Coleta:** apenas legendas **geradas automaticamente**, sem áudio/vídeo. Prefere português, depois inglês, quando há mais de uma faixa automática. A ferramenta avulsa `/extrator` também mantém suporte a legendas manuais.
 - **Espera:** legenda ainda indisponível gera novas tentativas, inicialmente após 5 minutos, aumentando até 24 horas. É possível tentar novamente pelo acervo.
@@ -62,6 +62,7 @@ Dados: `data/journal.sqlite3`. Configuração de redação: `data/editorial-sett
 | `OPENAI_API_KEY` | Alternativa ao formulário Redação; tem precedência |
 | `OPENAI_MODEL` | ID do modelo; tem precedência sobre o formulário |
 | `MONITOR_INTERVAL_SECONDS` | Padrão 600, mínimo 60 |
+| `CAPTION_INTERVAL_SECONDS` | Intervalo entre legendas, padrão 45, mínimo 20 |
 | `JOURNAL_DB` | Caminho SQLite, padrão `data/journal.sqlite3` |
 | `MONITOR_ENABLED=0` | Desativa o trabalhador para testes |
 | `YOUTUBE_PROXY_URL` | Proxy próprio/autorizado opcional |
@@ -70,7 +71,7 @@ Docker Compose lê `.env` baseado em `.env.example`. No PowerShell, use o formul
 
 ## Limites
 
-YouTube pode atrasar legendas, bloquear conexões, remover vídeos e alterar endpoints. Não há garantia de tempo real nem acesso a vídeos privados/excluídos/sem legendas. Recuperações têm prazo de 180 segundos por tentativa; um marcador removido ou canal volumoso pode exigir intervenção. A fila processa cinco canais, três legendas e duas análises por ciclo; o volume pode ampliar a latência. Textos acima de 30 mil trechos ou dois milhões de caracteres ficam sinalizados.
+YouTube pode atrasar legendas, bloquear conexões, remover vídeos e alterar endpoints. Não há garantia de tempo real nem acesso a vídeos privados/excluídos/sem legendas. Recuperações têm prazo de 180 segundos por tentativa; um marcador removido ou canal volumoso pode exigir intervenção. A fila processa cinco canais, até uma legenda a cada 45 segundos e duas análises por ciclo. O último vídeo de cada canal tem prioridade. Bloqueios do YouTube suspendem globalmente as consultas de legenda por 15 minutos, aumentando até seis horas; os canais continuam sendo acompanhados. O volume pode ampliar a latência. Textos acima de 30 mil trechos ou dois milhões de caracteres ficam sinalizados.
 
 A redação precisa de chave/modelo válidos e saldo/limites de API. Custos dependem do volume e do modelo; ajuste limites na sua conta. Citações ligam matérias aos vídeos, mas não substituem checagem externa. Fontes e análises podem conter erros.
 

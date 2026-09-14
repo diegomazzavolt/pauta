@@ -19,6 +19,7 @@ def db(tmp_path,monkeypatch):
     monkeypatch.delenv('OPENAI_API_KEY',raising=False)
     monkeypatch.delenv('OPENAI_MODEL',raising=False)
     database.init();monitor.stopping.clear()
+    monkeypatch.setattr(providers,'discover',lambda id:('Synthetic','Synthetic',[]))
     yield TestClient(app)
 
 
@@ -48,13 +49,15 @@ def test_new_video_auto_only_retries_and_idempotency(db,monkeypatch):
     now=time.time()
     monkeypatch.setattr(channels,'feed',lambda id:('Meu canal',[{'id':OLD,'title':'Anterior','published':now-3600}]))
     monitor.cycle()
-    assert db.get('/api/journal/videos').json()['total']==0
-    with database.connect() as conn:conn.execute('UPDATE channels SET next_check=0')
+    assert db.get('/api/journal/videos').json()['total']==1
+    with database.connect() as conn:
+        conn.execute('UPDATE channels SET next_check=0')
+        conn.execute('UPDATE worker_state SET caption_next=0')
     monkeypatch.setattr(channels,'feed',lambda id:('Meu canal',[{'id':NEW,'title':'Novo','published':now+0.01},{'id':OLD,'title':'Anterior','published':now-3600}]))
     monkeypatch.setattr(providers,'discover',lambda id:('Novo','Canal',[{'kind':'manual','code':'pt'}]))
     monitor.cycle()
     data=db.get('/api/journal/videos').json()
-    assert data['total']==1 and data['items'][0]['status']=='waiting'
+    assert data['total']==2 and data['items'][0]['status']=='waiting'
     assert 'automática' in data['items'][0]['error']
     monkeypatch.setattr(providers,'discover',lambda id:('Novo','Canal',[{'kind':'manual','code':'pt'},{'kind':'automatic','code':'en'}]))
     def fetch(track):
@@ -62,12 +65,14 @@ def test_new_video_auto_only_retries_and_idempotency(db,monkeypatch):
         return [{'start':0,'end':2000,'text':'Uma informação nova.'}]
     monkeypatch.setattr(providers,'fetch_track',fetch)
     db.post(f'/api/journal/videos/{NEW}/retry',json={})
-    with database.connect() as conn:conn.execute('UPDATE channels SET next_check=0')
+    with database.connect() as conn:
+        conn.execute('UPDATE channels SET next_check=0')
+        conn.execute('UPDATE worker_state SET caption_next=0')
     monitor.cycle()
     video=db.get(f'/api/journal/videos/{NEW}').json()
     assert video['status']=='ready' and video['cleaned_text']=='Uma informação nova.'
     assert video['analysis_status']=='pending' and video['analysis'] is None
-    assert db.get('/api/journal/videos').json()['total']==1
+    assert db.get('/api/journal/videos').json()['total']==2
 
 
 def test_include_recent_pause_and_catchup(db,monkeypatch):
@@ -133,7 +138,7 @@ def test_channel_feed_parser_rejects_wrong_channel(monkeypatch):
         def __exit__(self,*args):pass
         def get(self,*args,**kwargs):return Response()
     monkeypatch.setattr(channels,'session',Session)
-    with pytest.raises(ValueError):channels.feed(CHANNEL)
+    with pytest.raises(ValueError):channels.rss_feed(CHANNEL)
 
 
 def test_channel_feed_accepts_real_youtube_root_without_uc(monkeypatch):

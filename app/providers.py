@@ -71,11 +71,11 @@ def metadata(id):
 
 
 def discover_ytdlp(id):
-    args = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--skip-download", "--no-playlist", "--no-warnings", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0", "--dump-single-json"]
+    args = [sys.executable, "-X", "utf8", "-m", "yt_dlp", "--ignore-config", "--skip-download", "--no-playlist", "--no-warnings", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0", "--dump-single-json"]
     if os.getenv("YOUTUBE_PROXY_URL"):
         args += ["--proxy", os.environ["YOUTUBE_PROXY_URL"]]
     args += ["--", f"https://www.youtube.com/watch?v={id}"]
-    result = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=55, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+    result = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=55, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
     if result.returncode:
         raise RuntimeError(result.stderr)
     data = json.loads(result.stdout)

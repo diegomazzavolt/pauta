@@ -5,7 +5,7 @@ let dashboard = null, page = 'edition', archiveOffset = 0, archiveVersion = 0, e
 let sourcesFingerprint = '', editionFingerprint = '';
 const dates = new Intl.DateTimeFormat('pt-BR', {dateStyle:'long', timeZone:'America/Sao_Paulo'});
 const shortDates = new Intl.DateTimeFormat('pt-BR', {dateStyle:'short', timeStyle:'short', timeZone:'America/Sao_Paulo'});
-const statusNames = {queued:'Aguardando primeira consulta', watching:'Acompanhando', catchup_pending:'Recuperação pendente', error:'Nova tentativa programada', duplicate:'Canal repetido', pending:'Aguardando legenda', collecting:'Acessando legenda', waiting:'Legenda pendente', ready:'Texto salvo'};
+const statusNames = {queued:'Aguardando primeira consulta', watching:'Acompanhando', catchup_pending:'Recuperação pendente', error:'Nova tentativa programada', duplicate:'Canal repetido', pending:'Aguardando legenda', collecting:'Acessando legenda', waiting:'Legenda pendente', ready:'Legenda salva'};
 const priorities = {5:'Muito importante',4:'Importante',3:'Normal',2:'Secundária',1:'Baixa'};
 function notice(text='') { byId('global-notice').hidden = !text; byId('global-notice').textContent = text; }
 async function api(path, body) {
@@ -44,7 +44,7 @@ byId('import-form').addEventListener('submit',async event=>{
   event.preventDefault(); byId('import-submit').disabled=true;
   try {
     const result=await api('/import',{topic:byId('topic-name').value,text:byId('channel-links').value,priority:Number(byId('topic-priority').value),include_recent:byId('include-recent').checked});
-    byId('import-feedback').textContent=`${result.added} canal(is) cadastrado(s). ${result.duplicates} repetido(s) ignorado(s).` + (result.errors.length ? '\n'+result.errors.map(x=>`Linha ${x.line}: ${x.message} (${x.value})`).join('\n') : '\nO assunto está salvo. Você pode enviar outro bloco ou fechar esta janela.');
+    byId('import-feedback').textContent=`${result.added} canal(is) cadastrado(s). ${result.duplicates} repetido(s) ignorado(s).` + (result.errors.length ? '\n'+result.errors.map(x=>`Linha ${x.line}: ${x.message} (${x.value})`).join('\n') : '\nO assunto está salvo. O último vídeo de cada canal entrará automaticamente na coleta e análise. Você pode enviar outro bloco ou fechar esta janela.');
     if(result.added || result.duplicates){await refresh(); showPage('sources');}
   }catch(error){byId('import-feedback').textContent=error.message;}
   finally{byId('import-submit').disabled=false;}
@@ -100,6 +100,7 @@ async function refresh(){
     const recent=dashboard.worker.heartbeat>(Date.now()/1000-300);
     byId('monitor-status').textContent=recent?dashboard.worker.message:'Monitor sem atividade recente';
     byId('monitor-detail').textContent=dashboard.worker.error || `Consulta a cada ${Math.round(dashboard.interval/60)} minutos. ${dashboard.pending_analysis} textos aguardam redação${dashboard.ai_configured ? '.' : ' · configure a redação para gerar as matérias.'}`;
+    if(dashboard.worker.caption_blocks>0 && dashboard.worker.caption_next>Date.now()/1000) byId('monitor-detail').textContent = `O YouTube limitou o acesso às legendas. Nova consulta após ${shortDates.format(new Date(dashboard.worker.caption_next*1000))}. ${dashboard.counts.ready||0} legendas já estão salvas. Os canais continuam sendo acompanhados.`;
     if(!['SELECT','INPUT'].includes(document.activeElement.tagName))renderTopics();
     if(page==='edition')await loadEdition();
     if(page==='archive'&&!byId('video-dialog').open)await loadArchive();
@@ -148,7 +149,7 @@ async function loadArchive(){
     for(const video of data.items){
       const row=el('article',undefined,'video-row'),info=el('div'),actions=el('div',undefined,'video-actions');
       info.append(el('h2',video.title),el('span',statusNames[video.status]||video.status,'badge '+(video.status==='ready'?'':'waiting')));
-      info.append(el('p',`Publicado em ${shortDates.format(new Date(video.published*1000))}${video.status==='ready' ? ' · '+(video.analysis_status==='ready'?'Analisado':video.analysis_status==='error'?'Falha na redação':'Aguardando redação') : ''}`));
+      info.append(el('p',`${video.published_known ? 'Publicado em '+shortDates.format(new Date(video.published*1000)) : 'Encontrado em '+shortDates.format(new Date(video.discovered*1000))+' · publicação não informada pelo YouTube'}${video.status==='ready' ? ' · '+(video.analysis_status==='ready'?'Analisado':video.analysis_status==='error'?'Falha na redação':'Aguardando redação') : ''}`));
       if(video.error||video.analysis_error)info.append(el('p',video.error||video.analysis_error));
       const read=el('button','Abrir conteúdo','button small');read.addEventListener('click',()=>openVideo(video.id));actions.append(read);
       if(video.status!=='ready'||video.analysis_status==='error'){const retry=el('button','Tentar novamente','button small');retry.addEventListener('click',async()=>{retry.disabled=true;try{await api(`/videos/${video.id}/retry`,{});await loadArchive();}catch(error){notice(error.message);}});actions.append(retry);}
